@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "edu.uvg.com.example.lab11_pm"
-        minSdk = 28
+        minSdk = 31 // cambio de sdk 28 - > 31
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
