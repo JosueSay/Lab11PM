@@ -1,5 +1,4 @@
 package edu.uvg.com.example.lab11_pm
-
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -19,98 +18,112 @@ import edu.uvg.com.example.lab11_pm.databinding.ActivityMainBinding
 import com.google.android.gms.location.LocationRequest
 
 class MainActivity : AppCompatActivity() {
-    // Declaración de variables
     lateinit var mFusedLocationProviderClient: FusedLocationProviderClient
-    val PERMISSION_ID = 42 // Identificador para el permiso
-    lateinit var binding: ActivityMainBinding // Variable de binding para el diseño de la actividad
-    val permisoLocation = android.Manifest.permission.ACCESS_COARSE_LOCATION // Permiso de ubicación aproximada
-    val permisoFine = android.Manifest.permission.ACCESS_FINE_LOCATION // Permiso de ubicación precisa
+    private lateinit var binding: ActivityMainBinding
+    private val PERMISSION_ID = 42
+    private val REQUIRED_PERMISSIONS_GPS = arrayOf(
+        android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        android.Manifest.permission.ACCESS_FINE_LOCATION
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        // Se infla la vista de la actividad
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Comprobación y solicitud de permisos para acceder a la ubicación del dispositivo
+        // Acción al presionar el botón "Acceder" para solicitar permisos y obtener ubicación
+        binding.accederButton.setOnClickListener {
+            if (allPermissionsGrantedGPS()) {
+                if (isLocationEnabled()) {
+                    checkAndRequestPermissions() // Verifica permisos y solicita si no están otorgados
+                    leerUbicacionActual() // Obtiene la ubicación actual si está disponible
+                } else {
+                    // Muestra un mensaje y abre la configuración de ubicación si está desactivada
+                    Toast.makeText(this, "Por favor, activa la ubicación para usar esta función", Toast.LENGTH_LONG).show()
+                    val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                    startActivity(intent)
+                }
+            } else {
+                // Solicita permisos de ubicación si no están otorgados
+                ActivityCompat.requestPermissions(
+                    this,
+                    REQUIRED_PERMISSIONS_GPS,
+                    PERMISSION_ID
+                )
+            }
+        }
+    }
+
+    // Verifica y solicita los permisos de ubicación
+    private fun checkAndRequestPermissions() {
         if (allPermissionsGrantedGPS()) {
             mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this)
-            // Llama a la función para obtener la ubicación actual del dispositivo
             leerUbicacionActual()
         } else {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(permisoLocation, permisoFine),
+                REQUIRED_PERMISSIONS_GPS,
                 PERMISSION_ID
             )
         }
-        binding.accederButton.setOnClickListener {
-            leerUbicacionActual()
+    }
+
+    // Maneja la respuesta a la solicitud de permisos
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (requestCode == PERMISSION_ID) {
+            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this)
+                leerUbicacionActual()
+            } else {
+                // Muestra un mensaje si los permisos no fueron otorgados
+                Toast.makeText(this, "Los permisos de ubicación son necesarios para usar esta función", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
-    // Función que verifica si todos los permisos para la ubicación están otorgados
+    // Verifica si la ubicación está habilitada en el dispositivo
+    private fun isLocationEnabled(): Boolean {
+        val locationManager: LocationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
+
+    // Verifica si todos los permisos necesarios para la ubicación están otorgados
     private fun allPermissionsGrantedGPS() = REQUIRED_PERMISSIONS_GPS.all {
         ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Función para obtener y mostrar la ubicación actual del dispositivo
+    // Obtiene y muestra la ubicación actual del dispositivo si los permisos y la ubicación están habilitados
     private fun leerUbicacionActual() {
-        if (checkLocationPermission()) {
+        if (allPermissionsGrantedGPS()) {
             if (isLocationEnabled()) {
                 mFusedLocationProviderClient.lastLocation.addOnCompleteListener(this) { task ->
                     var location: Location? = task.result
                     if (location == null) {
-                        requestNewLocationData()
+                        requestNewLocationData() // Si la ubicación no está disponible, se solicitan nuevos datos
                     } else {
-                        // Muestra la latitud y longitud obtenidas en la interfaz
+                        // Muestra la ubicación obtenida en la interfaz
                         binding.textViewLatitud.text = "LATITUD = " + location.latitude.toString()
                         binding.textViewLongitud.text = "LONGITUD = " + location.longitude.toString()
                     }
                 }
             } else {
-                // Notifica al usuario para activar la ubicación si está desactivada
+                // Si la ubicación está desactivada, se muestra un mensaje y se abre la configuración
                 Toast.makeText(this, "Activar ubicación", Toast.LENGTH_SHORT).show()
                 val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                 startActivity(intent)
-                finish()
             }
         } else {
+            // Si los permisos no están otorgados, se solicitan
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(permisoLocation, permisoFine),
+                REQUIRED_PERMISSIONS_GPS,
                 PERMISSION_ID
             )
         }
     }
 
-    // Función para verificar si la ubicación está activada en el dispositivo
-    private fun isLocationEnabled(): Boolean {
-        val locationManager: LocationManager =
-            getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(
-            LocationManager.NETWORK_PROVIDER
-        )
-    }
-
-    // Función para verificar si se otorgó el permiso de ubicación
-    private fun checkLocationPermission(): Boolean {
-        if (ContextCompat.checkSelfPermission(
-                this,
-                permisoLocation
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(permisoFine),
-                PERMISSION_ID
-            )
-            return false
-        }
-        return true
-    }
-
-    // Función para solicitar nuevos datos de ubicación
+    // Solicita nuevos datos de ubicación si no está disponible la ubicación actual
     private fun requestNewLocationData() {
         val mLocationRequest = LocationRequest.create().apply {
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
@@ -118,23 +131,5 @@ class MainActivity : AppCompatActivity() {
             fastestInterval = 0
             numUpdates = 1
         }
-    }
-
-    // Callback para obtener la última ubicación actualizada
-    private val mLocationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
-            val mLastLocation: Location? = locationResult.lastLocation
-            // Muestra la última latitud y longitud obtenida en la interfaz
-            binding.textViewLatitud.text = "LATITUD = " + mLastLocation?.latitude.toString()
-            binding.textViewLongitud.text = "LONGITUD = " + mLastLocation?.longitude.toString()
-        }
-    }
-
-    // Objeto companion para almacenar los permisos necesarios
-    companion object {
-        private val REQUIRED_PERMISSIONS_GPS = arrayOf(
-            android.Manifest.permission.ACCESS_COARSE_LOCATION,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
-        )
     }
 }
